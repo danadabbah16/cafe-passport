@@ -2,10 +2,13 @@ import os
 
 from flask import Flask, jsonify
 from db import init_db
+from cafes import bp as cafes_bp
+
 
 app = Flask(__name__)
 
 init_db()  # create schema + seed on first boot
+app.register_blueprint(cafes_bp)
 
 # Data directory is configurable so a container can mount a volume here (container contract)
 DATA_DIR = os.environ.get("DATA_DIR", "./data")
