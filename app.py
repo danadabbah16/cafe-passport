@@ -4,7 +4,7 @@ from flask import Flask, jsonify
 from db import init_db
 from cafes import bp as cafes_bp
 from analytics import bp as analytics_bp
-
+from flask import Flask, jsonify, render_template
 
 app = Flask(__name__)
 
@@ -17,13 +17,10 @@ app.register_blueprint(analytics_bp)
 def health():
     return jsonify({"status": "ok"})
 
+
 @app.route("/")
 def index():
-    return jsonify({
-        "app": "cafe-passport",
-        "endpoints": ["/health", "/cafes", "/cafes/<id>/visits", "/rankings", "/stats"],
-    })
-
+    return render_template("index.html")
 
 if __name__ == "__main__":
     # Port from environment with a sane default (container contract)

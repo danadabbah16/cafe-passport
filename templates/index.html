@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Café Passport</title>
+    <style>
+        body { font-family: system-ui, sans-serif; max-width: 760px; margin: 2rem auto; padding: 0 1rem; color: #222; }
+        h1 { color: #6f4e37; }
+        h2 { margin-top: 2rem; border-bottom: 2px solid #6f4e37; padding-bottom: .3rem; }
+        table { width: 100%; border-collapse: collapse; margin-top: .5rem; }
+        th, td { text-align: left; padding: .5rem; border-bottom: 1px solid #ddd; }
+        th { background: #f6f1ec; }
+        .rank { font-weight: bold; color: #6f4e37; }
+        .muted { color: #888; font-size: .9rem; }
+    </style>
+</head>
+<body>
+<h1>☕ Café Passport</h1>
+<p class="muted">Personal café log with recency-weighted rankings.</p>
+
+<h2>Rankings</h2>
+<table id="rankings"><tr><th>#</th><th>Café</th><th>Score</th><th>Raw</th><th>Visits</th></tr></table>
+
+<h2>Stats</h2>
+<table id="stats"></table>
+
+<h2>Cafés</h2>
+<table id="cafes"><tr><th>Name</th><th>Neighborhood</th><th>City</th></tr></table>
+
+<script>
+    async function load() {
+        const [rankings, stats, cafes] = await Promise.all([
+            fetch("/rankings").then(r => r.json()),
+            fetch("/stats").then(r => r.json()),
+            fetch("/cafes").then(r => r.json()),
+        ]);
+
+        const rt = document.getElementById("rankings");
+        rankings.forEach((r, i) => {
+            rt.insertAdjacentHTML("beforeend",
+                `<tr><td class="rank">${i + 1}</td><td>${r.cafe}</td><td>${r.score}</td><td>${r.raw_score}</td><td>${r.visits}</td></tr>`);
+        });
+
+        const st = document.getElementById("stats");
+        st.innerHTML = `
+    <tr><th>Total visits</th><td>${stats.total_visits}</td></tr>
+    <tr><th>Total spent</th><td>€${stats.total_spent}</td></tr>
+    <tr><th>Average rating</th><td>${stats.average_rating ?? "-"}</td></tr>
+    <tr><th>Most visited</th><td>${stats.most_visited ?? "-"}</td></tr>`;
+
+        const ct = document.getElementById("cafes");
+        cafes.forEach(c => {
+            ct.insertAdjacentHTML("beforeend",
+                `<tr><td>${c.name}</td><td>${c.neighborhood ?? "-"}</td><td>${c.city}</td></tr>`);
+        });
+    }
+    load();
+</script>
+</body>
+</html>
