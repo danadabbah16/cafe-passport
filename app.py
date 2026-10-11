@@ -12,15 +12,17 @@ init_db()  # create schema + seed on first boot
 app.register_blueprint(cafes_bp)
 app.register_blueprint(analytics_bp)
 
-# Data directory is configurable so a container can mount a volume here (container contract)
-DATA_DIR = os.environ.get("DATA_DIR", "./data")
-os.makedirs(DATA_DIR, exist_ok=True)
-DB_PATH = os.path.join(DATA_DIR, "cafe_passport.db")
-
 
 @app.route("/health")
 def health():
     return jsonify({"status": "ok"})
+
+@app.route("/")
+def index():
+    return jsonify({
+        "app": "cafe-passport",
+        "endpoints": ["/health", "/cafes", "/cafes/<id>/visits", "/rankings", "/stats"],
+    })
 
 
 if __name__ == "__main__":
