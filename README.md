@@ -9,7 +9,7 @@ recency-weighted, confidence-adjusted café rankings from raw visit history.
     git clone https://github.com/danadabbah16/cafe-passport
     cd cafe-passport
     python -m venv .venv
-    .venv\Scripts\activate          # Windows; on Unix: source .venv/bin/activate
+    .venv\Scripts\activate          
     python -m pip install -r requirements.txt
     python app.py
 
