@@ -125,7 +125,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 # -----------------------------------------------------------------------------
 COPY app.py db.py cafes.py analytics.py seed.sql ./
 COPY templates/ ./templates/
-
+COPY static/ ./static/
 
 RUN chown -R appuser:appuser /app
 

@@ -4,57 +4,351 @@
     <meta charset="utf-8">
     <title>Café Passport</title>
     <style>
-        body { font-family: system-ui, sans-serif; max-width: 760px; margin: 2rem auto; padding: 0 1rem; color: #222; }
-        h1 { color: #6f4e37; }
-        h2 { margin-top: 2rem; border-bottom: 2px solid #6f4e37; padding-bottom: .3rem; }
-        table { width: 100%; border-collapse: collapse; margin-top: .5rem; }
-        th, td { text-align: left; padding: .5rem; border-bottom: 1px solid #ddd; }
-        th { background: #f6f1ec; }
-        .rank { font-weight: bold; color: #6f4e37; }
-        .muted { color: #888; font-size: .9rem; }
+        :root {
+            --bg1: #f7f1e8; --bg2: #efe2d0; --card: #ffffff; --ink: #2b2118;
+            --accent: #6f4e37; --accent2: #b08968; --muted: #8a7a6d; --gold: #c9971c;
+            --ok: #2e7d32; --err: #b3261e; --line: #e8ddcf;
+        }
+        * { box-sizing: border-box; }
+        body {
+            font-family: system-ui, sans-serif; margin: 0; color: var(--ink);
+            background-color: #22180f;
+            background-image:
+                    linear-gradient(rgba(34, 24, 15, .10), rgba(34, 24, 15, .10)),
+                    url("/static/coffee-banner.jpg");
+            background-size: cover; background-position: center; background-attachment: fixed;
+            min-height: 100vh;
+        }
+        header {
+            color: #f3ead9; padding: 2.2rem 1rem 2rem; text-align: center;
+            position: relative; overflow: hidden;
+            background:
+                    radial-gradient(circle at 12% 130%, rgba(243,234,217,.10) 0 90px, transparent 95px),
+                    radial-gradient(circle at 88% -30%, rgba(243,234,217,.08) 0 120px, transparent 125px),
+                    linear-gradient(165deg, #3a2a1d, #22180f);
+            box-shadow: 0 3px 14px rgba(0,0,0,.25);
+        }
+        .ring { position: absolute; border-radius: 50%; border: 12px solid rgba(243,234,217,.07); }
+        .ring.r1 { width: 170px; height: 170px; left: -40px; top: -60px; }
+        .ring.r2 { width: 130px; height: 130px; right: -30px; bottom: -50px; }
+        .badge {
+            width: 88px; height: 88px; border-radius: 50%; margin: 0 auto .7rem;
+            background: #22180f; display: flex; align-items: center; justify-content: center;
+            box-shadow: 0 0 0 3px #3a2a1d, 0 0 0 5px #c9a27e;
+        }
+        .badge svg { height: 46px; transform: rotate(-20deg); }
+        header h1 { margin: 0; font-size: 1.7rem; letter-spacing: .06em; }
+        header p { margin: .35rem 0 0; opacity: .75; font-size: .9rem; letter-spacing: .12em; text-transform: uppercase; }
+        main { max-width: 1100px; margin: 1.5rem auto 3rem; padding: 0 1rem;
+            display: grid; grid-template-columns: 1fr 1fr; gap: 1.4rem; align-items: start; }
+        section.card { margin-bottom: 0; }
+        section.full { grid-column: 1 / -1; }
+        @media (max-width: 820px) { main { grid-template-columns: 1fr; } }
+        section.card {
+            background: var(--card); border-radius: 14px; padding: 1.2rem 1.4rem; margin-bottom: 1.4rem;
+            box-shadow: 0 4px 14px rgba(0,0,0,.07);
+        }
+        h2 { margin: 0 0 .8rem; color: var(--accent); font-size: 1.15rem; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { text-align: left; padding: .5rem .4rem; border-bottom: 1px solid var(--line); }
+        th { color: var(--muted); font-size: .8rem; text-transform: uppercase; letter-spacing: .04em; }
+        tr.top td { font-weight: 700; }
+        tr.top td:first-child::after { content: " 🏆"; }
+        .dots { letter-spacing: 2px; color: var(--gold); font-size: .85rem; }
+        form { display: flex; flex-wrap: wrap; gap: .6rem; align-items: flex-end; }
+        label { display: flex; flex-direction: column; font-size: .75rem; color: var(--muted); gap: .25rem; }
+        input, select {
+            padding: .5rem .6rem; border: 1px solid var(--line); border-radius: 8px;
+            background: #fff; color: var(--ink); font-size: .9rem;
+        }
+        button {
+            background: var(--accent); color: #fff; border: 0; border-radius: 8px;
+            padding: .6rem 1.1rem; font-size: .9rem; cursor: pointer;
+        }
+        button:hover { background: var(--accent2); }
+        #toast {
+            position: fixed; bottom: 1.2rem; left: 50%; transform: translateX(-50%);
+            padding: .7rem 1.2rem; border-radius: 10px; color: #fff; font-size: .9rem;
+            opacity: 0; transition: opacity .3s; pointer-events: none;
+        }
+        #toast.show { opacity: 1; }
+        #toast.ok { background: var(--ok); } #toast.err { background: var(--err); }
+        .bars { display: flex; flex-direction: column; gap: .45rem; margin-top: .4rem; }
+        .barrow { display: grid; grid-template-columns: 160px 1fr 30px; gap: .6rem; align-items: center; font-size: .85rem; }
+        .bar { background: var(--line); border-radius: 6px; height: 14px; overflow: hidden; }
+        .bar > div { background: var(--accent2); height: 100%; border-radius: 6px; }
+        .muted { color: var(--muted); font-size: .85rem; }
+
     </style>
 </head>
 <body>
-<h1>☕ Café Passport</h1>
-<p class="muted">Personal café log with recency-weighted rankings.</p>
+<header>
+    <div class="ring r1"></div>
+    <div class="ring r2"></div>
+    <div class="badge">
+        <svg viewBox="0 0 40 60" aria-hidden="true"><ellipse cx="20" cy="30" rx="18" ry="28" fill="#f3ead9"/><path d="M20 4 C14 20 26 40 20 56" stroke="#3a2a1d" stroke-width="5" fill="none" stroke-linecap="round"/></svg>
+    </div>
+    <h1>Café Passport</h1>
+    <p>Personal café log · recency-weighted rankings</p>
+</header>
+<main>
 
-<h2>Rankings</h2>
-<table id="rankings"><tr><th>#</th><th>Café</th><th>Score</th><th>Raw</th><th>Visits</th></tr></table>
+    <section class="card full">
+        <h2>Monthly budget</h2>
+        <form id="budgetForm" style="margin-bottom:.8rem">
+            <label>Goal € <input type="number" id="bGoal" step="1" min="1" style="width:110px"></label>
+            <button type="submit">Set goal</button>
+        </form>
+        <div class="barrow" id="budgetRow" hidden>
+            <span id="bLabel"></span>
+            <div class="bar"><div id="bFill"></div></div>
+            <span id="bPct"></span>
+        </div>
+        <p class="muted" id="bMsg">No budget set — enter a monthly goal above.</p>
+    </section>
 
-<h2>Stats</h2>
-<table id="stats"></table>
+    <section class="card">
+        <h2>Log a visit</h2>
+        <form id="visitForm">
+            <label>Café <select id="vCafe" required></select></label>
+            <label>Date <input type="date" id="vDate" required></label>
+            <label>Drink <input id="vDrink" placeholder="flat white" required></label>
+            <label>Price € <input type="number" id="vPrice" step="0.1" min="0" required style="width:90px"></label>
+            <label>Rating <select id="vRating" required></select></label>
+            <button type="submit">Log visit</button>
+        </form>
+    </section>
 
-<h2>Cafés</h2>
-<table id="cafes"><tr><th>Name</th><th>Neighborhood</th><th>City</th></tr></table>
+    <section class="card">
+        <h2>Add a café</h2>
+        <form id="cafeForm">
+            <label>Name <input id="cName" required></label>
+            <label>Neighborhood <input id="cNeigh"></label>
+            <label>City <input id="cCity" required></label>
+            <button type="submit">Add café</button>
+        </form>
+    </section>
+
+    <section class="card">
+        <h2>Rankings</h2>
+        <table id="rankings"><thead><tr><th>#</th><th>Café</th><th>Score</th><th>Raw</th><th>Visits</th></tr></thead><tbody></tbody></table>
+        <p class="muted" id="noRank" hidden>No visits yet — log one above.</p>
+    </section>
+
+    <section class="card">
+        <h2>Visits per café</h2>
+        <div class="bars" id="bars"></div>
+    </section>
+
+    <section class="card">
+        <h2>Stats</h2>
+        <table id="stats"><tbody></tbody></table>
+    </section>
+
+    <section class="card">
+        <h2>Insights</h2>
+        <ul id="insights" style="margin:.2rem 0 0; padding-left:1.1rem; line-height:1.7"></ul>
+        <p class="muted" id="noInsights" hidden>Log a few visits to unlock money-saving insights.</p>
+    </section>
+
+
+    <section class="card">
+        <h2>Cafés <select id="cityFilter" style="margin-left:.6rem"><option value="">All cities</option></select></h2>
+        <table id="cafes"><thead><tr><th>Name</th><th>Neighborhood</th><th>City</th></tr></thead><tbody></tbody></table>
+    </section>
+
+</main>
+<div id="toast"></div>
 
 <script>
-    async function load() {
+    const $ = id => document.getElementById(id);
+    let cafesCache = [];
+
+    function toast(msg, ok) {
+        const t = $("toast");
+        t.textContent = msg;
+        t.className = "show " + (ok ? "ok" : "err");
+        setTimeout(() => t.className = "", 2600);
+    }
+
+    function dots(score) {
+        const n = Math.round(score / 2);
+        return "●".repeat(n) + "○".repeat(5 - n);
+    }
+
+    async function loadAll() {
         const [rankings, stats, cafes] = await Promise.all([
             fetch("/rankings").then(r => r.json()),
             fetch("/stats").then(r => r.json()),
             fetch("/cafes").then(r => r.json()),
         ]);
+        cafesCache = cafes;
 
-        const rt = document.getElementById("rankings");
+        const rb = $("rankings").querySelector("tbody");
+        rb.innerHTML = "";
+        $("noRank").hidden = rankings.length > 0;
         rankings.forEach((r, i) => {
-            rt.insertAdjacentHTML("beforeend",
-                `<tr><td class="rank">${i + 1}</td><td>${r.cafe}</td><td>${r.score}</td><td>${r.raw_score}</td><td>${r.visits}</td></tr>`);
+            rb.insertAdjacentHTML("beforeend",
+                `<tr class="${i === 0 ? "top" : ""}"><td>${i + 1}</td><td>${r.cafe}</td>
+       <td>${r.score} <span class="dots">${dots(r.score)}</span></td>
+       <td>${r.raw_score}</td><td>${r.visits}</td></tr>`);
         });
 
-        const st = document.getElementById("stats");
-        st.innerHTML = `
+        const bars = $("bars");
+        bars.innerHTML = "";
+        const max = Math.max(1, ...rankings.map(r => r.visits));
+        rankings.forEach(r => {
+            bars.insertAdjacentHTML("beforeend",
+                `<div class="barrow"><span>${r.cafe}</span>
+       <div class="bar"><div style="width:${(r.visits / max) * 100}%"></div></div>
+       <span>${r.visits}</span></div>`);
+        });
+        if (!rankings.length) bars.innerHTML = '<p class="muted">Nothing to chart yet.</p>';
+
+        $("stats").querySelector("tbody").innerHTML = `
     <tr><th>Total visits</th><td>${stats.total_visits}</td></tr>
     <tr><th>Total spent</th><td>€${stats.total_spent}</td></tr>
     <tr><th>Average rating</th><td>${stats.average_rating ?? "-"}</td></tr>
     <tr><th>Most visited</th><td>${stats.most_visited ?? "-"}</td></tr>`;
 
-        const ct = document.getElementById("cafes");
-        cafes.forEach(c => {
-            ct.insertAdjacentHTML("beforeend",
-                `<tr><td>${c.name}</td><td>${c.neighborhood ?? "-"}</td><td>${c.city}</td></tr>`);
-        });
+        $("vCafe").innerHTML = cafes.map(c => `<option value="${c.id}">${c.name}</option>`).join("");
+        const cities = [...new Set(cafes.map(c => c.city))];
+        const sel = $("cityFilter");
+        const keep = sel.value;
+        sel.innerHTML = '<option value="">All cities</option>' + cities.map(c => `<option>${c}</option>`).join("");
+        sel.value = keep;
+
+        renderInsights(cafes);
+        renderCafes();
     }
-    load();
+
+    function renderCafes() {
+        const city = $("cityFilter").value;
+        const rows = cafesCache.filter(c => !city || c.city === city);
+        $("cafes").querySelector("tbody").innerHTML = rows.map(c =>
+            `<tr><td>${c.name}</td><td>${c.neighborhood ?? "-"}</td><td>${c.city}</td></tr>`).join("");
+    }
+
+    async function renderInsights(cafes) {
+        const lists = await Promise.all(
+            cafes.map(c => fetch(`/cafes/${c.id}/visits`).then(r => r.json()).then(vs => ({cafe: c.name, visits: vs})))
+        );
+        const all = lists.flatMap(l => l.visits.map(v => ({...v, cafe: l.cafe})));
+        renderBudget(all)
+        const ul = $("insights");
+        ul.innerHTML = "";
+        $("noInsights").hidden = all.length >= 2;
+        if (all.length < 2) return;
+
+        const out = [];
+        const totalSpent = all.reduce((s, v) => s + v.price, 0);
+        const avg = totalSpent / all.length;
+        out.push(`You spend <b>€${avg.toFixed(2)}</b> per visit on average.`);
+
+        const perCafe = lists.filter(l => l.visits.length > 0).map(l => ({
+            cafe: l.cafe,
+            n: l.visits.length,
+            avgPrice: l.visits.reduce((s, v) => s + v.price, 0) / l.visits.length,
+            avgRating: l.visits.reduce((s, v) => s + v.rating, 0) / l.visits.length,
+        }));
+
+        if (perCafe.length >= 2) {
+            const priciest = [...perCafe].sort((a, b) => b.avgPrice - a.avgPrice)[0];
+            const value = [...perCafe].filter(c => c.avgPrice > 0)
+                .sort((a, b) => (b.avgRating / b.avgPrice) - (a.avgRating / a.avgPrice))[0];
+            out.push(`Priciest habit: <b>${priciest.cafe}</b> at €${priciest.avgPrice.toFixed(2)}/visit.`);
+            if (value && value.cafe !== priciest.cafe) {
+                const save = (priciest.avgPrice - value.avgPrice) * priciest.n;
+                out.push(`Best value: <b>${value.cafe}</b> (${value.avgRating.toFixed(1)}★ at €${value.avgPrice.toFixed(2)}).`);
+                if (save > 0) out.push(`Swapping your ${priciest.n} ${priciest.cafe} visit(s) for ${value.cafe} would have saved <b>€${save.toFixed(2)}</b>. ☕💰`);
+            }
+        }
+
+        const cutoff = new Date();
+        cutoff.setDate(cutoff.getDate() - 30);
+        const recent = all.filter(v => new Date(v.visit_date) >= cutoff);
+        if (recent.length) {
+            const m = recent.reduce((s, v) => s + v.price, 0);
+            out.push(`Last 30 days: <b>€${m.toFixed(2)}</b> across ${recent.length} visit(s).`);
+        }
+
+        ul.innerHTML = out.map(t => `<li>${t}</li>`).join("");
+    }
+
+    function renderBudget(allVisits) {
+        let goal = 0;
+        try { goal = parseFloat(localStorage.getItem("budgetGoal")) || 0; } catch (e) {}
+        const row = $("budgetRow"), msg = $("bMsg");
+        if (!goal) { row.hidden = true; msg.hidden = false; msg.textContent = "No budget set — enter a monthly goal above."; return; }
+
+        const now = new Date();
+        const spent = allVisits
+            .filter(v => { const d = new Date(v.visit_date); return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear(); })
+            .reduce((s, v) => s + v.price, 0);
+
+        const pct = Math.min(100, (spent / goal) * 100);
+        row.hidden = false; msg.hidden = false;
+        $("bLabel").textContent = `€${spent.toFixed(2)} of €${goal.toFixed(0)}`;
+        $("bFill").style.width = pct + "%";
+        $("bFill").style.background = spent > goal ? "var(--err)" : pct > 80 ? "var(--gold)" : "var(--ok)";
+        $("bPct").textContent = Math.round(pct) + "%";
+        msg.textContent = spent > goal
+            ? `Over budget by €${(spent - goal).toFixed(2)} this month 😬`
+            : `€${(goal - spent).toFixed(2)} left to spend this month ☕`;
+        $("bGoal").value = goal;
+    }
+
+    $("budgetForm").addEventListener("submit", e => {
+        e.preventDefault();
+        try { localStorage.setItem("budgetGoal", $("bGoal").value); } catch (e2) {}
+        loadAll();
+        toast("Budget goal saved 🎯", true);
+    });
+
+
+
+    $("cityFilter").addEventListener("change", renderCafes);
+
+    $("vRating").innerHTML = Array.from({length: 10}, (_, i) => `<option>${i + 1}</option>`).join("");
+    $("vDate").value = new Date().toISOString().slice(0, 10);
+
+    $("visitForm").addEventListener("submit", async e => {
+        e.preventDefault();
+        const res = await fetch(`/cafes/${$("vCafe").value}/visits`, {
+            method: "POST", headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({
+                visit_date: $("vDate").value, drink: $("vDrink").value,
+                price: parseFloat($("vPrice").value), rating: parseInt($("vRating").value),
+            }),
+        });
+        const data = await res.json();
+        if (res.ok) {
+            toast("Visit logged ☕", true);
+            e.target.reset();
+            $("vDate").value = new Date().toISOString().slice(0, 10);
+            loadAll();
+        } else toast(data.error || "Something went wrong", false);
+    });
+
+    $("cafeForm").addEventListener("submit", async e => {
+        e.preventDefault();
+        const res = await fetch("/cafes", {
+            method: "POST", headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({
+                name: $("cName").value,
+                neighborhood: $("cNeigh").value || null,
+                city: $("cCity").value
+            }),
+        });
+        const data = await res.json();
+        if (res.ok) {
+            toast("Café added 🎉", true);
+            e.target.reset();
+            loadAll();
+        } else toast(data.error || "Something went wrong", false);
+    });
+
+    loadAll();
 </script>
 </body>
 </html>
