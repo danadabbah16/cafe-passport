@@ -6,7 +6,7 @@ recency-weighted, confidence-adjusted café rankings from raw visit history.
 
 ## Run locally
 
-    git clone https://github.com/danadabbah16/cafe-passport.git
+    git clone https://github.com/danadabbah16/cafe-passport
     cd cafe-passport
     python -m venv .venv
     .venv\Scripts\activate          # Windows; on Unix: source .venv/bin/activate
