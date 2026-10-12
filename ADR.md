@@ -31,3 +31,11 @@ Context: The 70% bar should be spent on logic that can actually be wrong, not fr
 Decision: Unit-test the ranking math (weights, weighted score, shrinkage, ordering) against hand-computed values, and the API's validation rules (404/400/409 paths) through Flask's test client on a temp database.
 Alternatives considered: End-to-end tests against a running server with curl-style calls — rejected as slower, flakier, and no better at catching logic errors.
 Consequences: High confidence in the math and input handling.
+
+## 5. Deliberately not built: multi-user accounts and authentication
+Date: 2026-10-12
+Status: Decided
+Context: A visit log could naturally serve many users, which would require accounts, login, and per-user data separation.
+Decision: The app is single-user by design: no auth, no user table, every visit belongs to the one owner.
+Alternatives considered: Flask-Login with a users table — rejected because it adds a dependency and schema complexity that serve no requirement in this assignment, and §1b asks that additions be justified.
+Consequences: The app stays small and fully explainable; multi-user support would require adding a user_id to visits and an auth layer, which is feasible later without touching the ranking logic.
