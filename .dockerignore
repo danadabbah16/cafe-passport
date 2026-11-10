@@ -1,0 +1,10 @@
+.git/
+.venv/
+.idea/
+data/
+*.db
+__pycache__/
+.coverage
+tests/
+container/
+.env
