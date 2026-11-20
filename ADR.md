@@ -39,3 +39,19 @@ Context: A visit log could naturally serve many users, which would require accou
 Decision: The app is single-user by design: no auth, no user table, every visit belongs to the one owner.
 Alternatives considered: Flask-Login with a users table — rejected because it adds a dependency and schema complexity that serve no requirement in this assignment, and §1b asks that additions be justified.
 Consequences: The app stays small and fully explainable; multi-user support would require adding a user_id to visits and an auth layer, which is feasible later without touching the ranking logic.
+
+## ADR-6: Splitting the monolith along the logging/analytics seam
+Date: 2026-11-20
+Status: Accepted
+
+**Context:** Assignment 2 requires one service per feature domain, each with its own container and its own database. ADR-2 placed the seam between logging (cafes, visits) and analytics (rankings, stats), with analytics only reading visit rows.
+
+**Decision:** Split into two services:
+- `cafes` (services/cafes): owns the `cafes` and `visits` tables; exposes POST/GET /cafes, POST/GET /cafes/{id}/visits, and a new GET /visits returning all visit rows (cafe_id, visit_date, rating, price).
+- `analytics` (services/analytics): owns its own database holding the monthly budget goal (moved from browser localStorage, giving the domain real state); computes /rankings and /stats by calling GET /visits on cafes over HTTP, using CAFES_URL from the environment.
+
+The cross-seam flow is server side: analytics → cafes. A single GET /visits call replaces one call per café, so rankings cost one HTTP request rather than N.
+
+**Alternatives considered:** UI calling both services and computing rankings in the browser (rejected: moves domain logic into the UI); analytics keeping a copy of visits synced from cafes (rejected: needs a message broker or background job, both out of scope).
+
+**Consequences:** ADR-2 held: only read access to visit rows crosses the seam. Analytics can no longer join visits to café names in SQL; it joins in code after one call. If cafes is down, analytics cannot rank (handled in a later ADR on partial failure); cafes is unaffected by analytics being down.
