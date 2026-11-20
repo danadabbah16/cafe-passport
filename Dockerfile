@@ -44,7 +44,7 @@
 # -----------------------------------------------------------------------------
 #  TODO 1  Pick your base image. Use the `-slim` variant of your language.
 # -----------------------------------------------------------------------------
-FROM python:3.12-slim
+FROM python:3.12.16-slim
 # Node:  FROM node:22-slim
 
 
