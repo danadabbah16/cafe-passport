@@ -82,3 +82,12 @@ def list_visits(cafe_id):
     ).fetchall()
     conn.close()
     return jsonify([dict(row) for row in rows])
+
+@bp.route("/visits", methods=["GET"])
+def list_all_visits():
+    conn = get_connection()
+    rows = conn.execute(
+        "SELECT id, cafe_id, visit_date, drink, price, rating FROM visits ORDER BY visit_date DESC"
+    ).fetchall()
+    conn.close()
+    return jsonify([dict(r) for r in rows])
