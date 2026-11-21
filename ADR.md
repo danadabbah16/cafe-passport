@@ -55,3 +55,21 @@ The cross-seam flow is server side: analytics → cafes. A single GET /visits ca
 **Alternatives considered:** UI calling both services and computing rankings in the browser (rejected: moves domain logic into the UI); analytics keeping a copy of visits synced from cafes (rejected: needs a message broker or background job, both out of scope).
 
 **Consequences:** ADR-2 held: only read access to visit rows crosses the seam. Analytics can no longer join visits to café names in SQL; it joins in code after one call. If cafes is down, analytics cannot rank (handled in a later ADR on partial failure); cafes is unaffected by analytics being down.
+
+## ADR-7: Data per service, versioned migrations, forward-only recovery
+Date: 2026-11-21
+Status: Accepted
+
+**Context:** Assignment 1 used one SQLite file created on first boot. Assignment 2 requires one SQL Server database per service, with schema changes applied in place by versioned migrations that preserve existing data.
+
+**Decision:**
+- `cafes` database: the `cafes` and `visits` tables (the foreign key between them stays, since both live in the same service).
+- `analytics` database: one `budget_goal` table, moved from browser localStorage (ADR-6). It holds no copy of visits; visit data is fetched from cafes over HTTP.
+- Migrations: numbered SQL files per service (`migrations/001_init.sql`, `002_...`) applied in order at startup by a small runner, which records each applied file in a `schema_migrations` table so a second boot applies nothing. Applied files are never edited; corrections go in a new file.
+- The data-preserving migration: `002` adds a `currency` column to `visits` with default `'EUR'`, so existing rows are kept and backfilled.
+
+**Integrity at the seam:** analytics refers to cafés only by `cafe_id` in data it receives, never stores them, so no cross-database foreign key is lost. A visit whose café cannot be found is skipped (see `group_by_cafe`), matching the old inner join.
+
+**Recovery plan for a bad migration (forward-only):** fix it with a new migration rather than editing the applied one; if data was damaged, restore the database with Azure SQL point-in-time restore and redeploy the previous image by its SHA tag.
+
+**Consequences:** no down-migrations to maintain; startup must apply migrations before serving, which is safe because each Container App runs at most one replica.
