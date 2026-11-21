@@ -1,0 +1,27 @@
+import os
+
+from flask import Flask, jsonify
+
+from db import init_db, get_connection
+from cafes import bp
+
+app = Flask(__name__)
+init_db()
+app.register_blueprint(bp)
+
+VERSION = os.environ.get("GIT_SHA", "dev")
+
+
+@app.route("/health", methods=["GET"])
+def health():
+    try:
+        conn = get_connection()
+        conn.execute("SELECT 1")
+        conn.close()
+        return jsonify({"status": "ok", "db": "ok", "version": VERSION}), 200
+    except Exception:
+        return jsonify({"status": "error", "db": "unreachable", "version": VERSION}), 503
+
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8000)))
