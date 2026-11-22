@@ -37,3 +37,11 @@ def test_rankings_endpoint_returns_list(client):
     r = client.get("/rankings")
     assert r.status_code == 200
     assert isinstance(r.get_json(), list)
+
+def test_list_all_visits(client):
+    client.post("/cafes/1/visits",
+                json={"visit_date": "2026-11-01", "drink": "latte", "price": 3.5, "rating": 8})
+    r = client.get("/visits")
+    assert r.status_code == 200
+    visits = r.get_json()
+    assert any(v["cafe_id"] == 1 and v["drink"] == "latte" for v in visits)

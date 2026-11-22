@@ -1,6 +1,8 @@
 import os
 from datetime import date, datetime
 
+from collections import Counter
+
 from flask import Blueprint, jsonify
 
 from db import get_connection
@@ -59,39 +61,64 @@ def rank_cafes(visits_by_cafe: dict, today: date) -> list:
     return results
 
 
-# routes (thin: fetch rows, call the math)
+# data access: the ONLY place analytics reads data it does not own.
+# After the split these two functions become HTTP calls to the cafes service
+# (GET /visits and GET /cafes); nothing below them changes.
+
+def load_visits() -> list:
+    """All visit rows: cafe_id, visit_date, rating, price."""
+    conn = get_connection()
+    rows = conn.execute("SELECT cafe_id, visit_date, rating, price FROM visits").fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def load_cafe_names() -> dict:
+    """{cafe_id: name} for every cafe."""
+    conn = get_connection()
+    rows = conn.execute("SELECT id, name FROM cafes").fetchall()
+    conn.close()
+    return {r["id"]: r["name"] for r in rows}
+
+
+# joins in code (previously SQL JOINs)
+
+def group_by_cafe(visits: list, names: dict) -> dict:
+    """{cafe_name: [visit rows]}. Visits whose cafe_id has no cafe are skipped,
+    matching the old inner JOIN."""
+    grouped = {}
+    for v in visits:
+        name = names.get(v["cafe_id"])
+        if name is None:
+            continue
+        grouped.setdefault(name, []).append(
+            {"visit_date": v["visit_date"], "rating": v["rating"]}
+        )
+    return grouped
+
+
+def compute_stats(visits: list, names: dict) -> dict:
+    """Totals across all visits, plus the most visited cafe."""
+    n = len(visits)
+    spent = sum(v["price"] for v in visits)
+    counts = Counter(v["cafe_id"] for v in visits if v["cafe_id"] in names)
+    top = counts.most_common(1)
+    return {
+        "total_visits": n,
+        "total_spent": round(spent, 2) if spent else 0,
+        "average_rating": round(sum(v["rating"] for v in visits) / n, 2) if n else None,
+        "most_visited": names[top[0][0]] if top else None,
+    }
+
+
+# routes (thin: load data, call the logic)
 
 @bp.route("/rankings", methods=["GET"])
 def rankings():
-    conn = get_connection()
-    rows = conn.execute(
-        "SELECT c.name AS cafe_name, v.visit_date, v.rating "
-        "FROM visits v JOIN cafes c ON c.id = v.cafe_id"
-    ).fetchall()
-    conn.close()
-
-    visits_by_cafe = {}
-    for row in rows:
-        visits_by_cafe.setdefault(row["cafe_name"], []).append(
-            {"visit_date": row["visit_date"], "rating": row["rating"]}
-        )
+    visits_by_cafe = group_by_cafe(load_visits(), load_cafe_names())
     return jsonify(rank_cafes(visits_by_cafe, date.today()))
 
 
 @bp.route("/stats", methods=["GET"])
 def stats():
-    conn = get_connection()
-    row = conn.execute(
-        "SELECT COUNT(*) AS n, SUM(price) AS spent, AVG(rating) AS avg_rating FROM visits"
-    ).fetchone()
-    top = conn.execute(
-        "SELECT c.name, COUNT(*) AS n FROM visits v JOIN cafes c ON c.id = v.cafe_id "
-        "GROUP BY c.id ORDER BY n DESC LIMIT 1"
-    ).fetchone()
-    conn.close()
-    return jsonify({
-        "total_visits": row["n"],
-        "total_spent": round(row["spent"], 2) if row["spent"] else 0,
-        "average_rating": round(row["avg_rating"], 2) if row["avg_rating"] else None,
-        "most_visited": top["name"] if top else None,
-    })
+    return jsonify(compute_stats(load_visits(), load_cafe_names()))

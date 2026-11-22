@@ -2,7 +2,8 @@ from datetime import date, timedelta
 
 import pytest
 
-from analytics import adjusted_score, rank_cafes, recency_weight, weighted_score
+from analytics import adjusted_score, rank_cafes, recency_weight, weighted_score, group_by_cafe, compute_stats
+
 
 TODAY = date(2026, 10, 12)
 
@@ -53,3 +54,33 @@ def test_one_lucky_visit_does_not_top_strong_regular():
 
 def test_rank_cafes_empty():
     assert rank_cafes({}, TODAY) == []
+
+
+NAMES = {1: "HanSo Café", 2: "La Papa"}
+VISITS = [
+    {"cafe_id": 1, "visit_date": "2026-10-01", "rating": 8, "price": 3.0},
+    {"cafe_id": 1, "visit_date": "2026-10-05", "rating": 6, "price": 4.0},
+    {"cafe_id": 2, "visit_date": "2026-10-03", "rating": 9, "price": 2.5},
+    {"cafe_id": 99, "visit_date": "2026-10-04", "rating": 1, "price": 1.0},  # unknown cafe
+]
+
+
+def test_group_by_cafe_groups_by_name_and_skips_unknown_cafes():
+    grouped = group_by_cafe(VISITS, NAMES)
+    assert set(grouped) == {"HanSo Café", "La Papa"}
+    assert len(grouped["HanSo Café"]) == 2
+    assert grouped["La Papa"][0] == {"visit_date": "2026-10-03", "rating": 9}
+
+
+def test_compute_stats_totals_and_most_visited():
+    s = compute_stats(VISITS, NAMES)
+    assert s["total_visits"] == 4
+    assert s["total_spent"] == 10.5          # 3.0 + 4.0 + 2.5 + 1.0
+    assert s["average_rating"] == 6.0        # (8 + 6 + 9 + 1) / 4
+    assert s["most_visited"] == "HanSo Café" # unknown cafe 99 not counted
+
+
+def test_compute_stats_empty():
+    s = compute_stats([], NAMES)
+    assert s == {"total_visits": 0, "total_spent": 0,
+                 "average_rating": None, "most_visited": None}
