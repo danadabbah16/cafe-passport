@@ -327,7 +327,7 @@
 
     $("visitForm").addEventListener("submit", async e => {
         e.preventDefault();
-        const res = await fetch(`/cafes/${$("vCafe").value}/visits`, {
+        const res = await fetch(`${CONFIG.CAFES_URL}/cafes/${$("vCafe").value}/visits`, {
             method: "POST", headers: {"Content-Type": "application/json"},
             body: JSON.stringify({
                 visit_date: $("vDate").value, drink: $("vDrink").value,
@@ -345,21 +345,15 @@
 
     $("cafeForm").addEventListener("submit", async e => {
         e.preventDefault();
-        const res = await fetch("/cafes", {
+        const res = await fetch(CONFIG.CAFES_URL + "/cafes", {
             method: "POST", headers: {"Content-Type": "application/json"},
-            body: JSON.stringify({
-                name: $("cName").value,
-                neighborhood: $("cNeigh").value || null,
-                city: $("cCity").value
-            }),
+            body: JSON.stringify({ name: $("cName").value, neighborhood: $("cNeigh").value || null, city: $("cCity").value }),
         });
         const data = await res.json();
-        if (res.ok) {
-            toast("Café added 🎉", true);
-            e.target.reset();
-            loadAll();
-        } else toast(data.error || "Something went wrong", false);
+        if (res.ok) { toast("Café added 🎉", true); e.target.reset(); loadAll(); }
+        else toast(data.error || "Something went wrong", false);
     });
+
 
     loadAll();
 </script>
