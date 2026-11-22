@@ -1,12 +1,29 @@
 services:
-  app:
-    build: .
+  cafes:
+    build: ./services/cafes
     ports:
-      - "8000:8000"
+      - "8001:8000"
     environment:
       - DATA_DIR=/data
+      - UI_ORIGIN=http://localhost:8080
     volumes:
-      - cafe-data:/data
+      - cafes-data:/data
+
+  analytics:
+    build: ./services/analytics
+    ports:
+      - "8002:8000"
+    environment:
+      - CAFES_URL=http://cafes:8000
+      - CAFES_TIMEOUT_S=2
+      - UI_ORIGIN=http://localhost:8080
+
+  ui:
+    image: nginx:1.27-alpine
+    ports:
+      - "8080:80"
+    volumes:
+      - ./ui:/usr/share/nginx/html:ro
 
   db:
     image: mcr.microsoft.com/mssql/server:2022-latest
@@ -30,4 +47,4 @@ services:
     entrypoint: ["/opt/mssql-tools18/bin/sqlcmd", "-S", "db", "-U", "sa", "-P", "YourStrong!Pass123", "-C", "-i", "/scripts/init.sql"]
 
 volumes:
-  cafe-data:
+  cafes-data:
