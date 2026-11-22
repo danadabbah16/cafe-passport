@@ -9,6 +9,16 @@ app = Flask(__name__)
 init_db()
 app.register_blueprint(bp)
 
+UI_ORIGIN = os.environ.get("UI_ORIGIN", "http://localhost:8080")
+
+
+@app.after_request
+def cors(resp):
+    resp.headers["Access-Control-Allow-Origin"] = UI_ORIGIN
+    resp.headers["Access-Control-Allow-Headers"] = "Content-Type"
+    resp.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+    return resp
+
 VERSION = os.environ.get("GIT_SHA", "dev")
 
 
