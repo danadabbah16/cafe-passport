@@ -73,3 +73,37 @@ Status: Accepted
 **Recovery plan for a bad migration (forward-only):** fix it with a new migration rather than editing the applied one; if data was damaged, restore the database with Azure SQL point-in-time restore and redeploy the previous image by its SHA tag.
 
 **Consequences:** no down-migrations to maintain; startup must apply migrations before serving, which is safe because each Container App runs at most one replica.
+
+## ADR-8: Serverless hosting on Azure (planned)
+Date: 2026-11-22
+Status: Accepted (deployment not yet completed at submission)
+
+**Decision:** Both services on Azure Container Apps (Consumption plan, min 0 / max 1 replica), one Azure SQL serverless database per service on one logical server (free offer, auto-pause after 60 min), the UI on a Storage static website, images from GHCR tagged with the commit SHA.
+
+**Cost model:** everything is pay-per-use; nothing costs money while idle.
+
+**Consequences of scale-to-zero:** the first request after idle starts a container and may find the database paused (resume takes up to about a minute), so connections need retries with backoff, and the UI shows a "starting up, try again" message instead of a blank page (implemented). Max 1 replica means migrations at startup never run twice concurrently.
+
+**At 100x traffic:** raise max replicas, move migrations out of startup into a pipeline step (so replicas don't race), and consider a provisioned database tier to avoid pause/resume latency.
+
+## ADR-9: Pipeline gates and testing
+Date: 2026-11-22
+Status: Accepted
+
+**Decision:** CI runs on every push and PR: one test job per service (each in its own folder with its own dependencies), and an images job that only runs after tests pass and publishes SHA-tagged images to GHCR only from main.
+
+**Cross-seam test:** analytics' tests replace cafes with stubs (monkeypatched `load_visits` / `load_cafe_names`), plus one test against an unreachable URL that proves a real network failure becomes `CafesUnavailable` and a 503. Stubbing was chosen over running the compose stack in CI because it is fast and deterministic.
+
+**Deliberately not tested:** the UI's JavaScript (verified manually, with screenshots of each failure mode), and the timeout value itself.
+
+**Known gap:** per-service coverage threshold, linting and system.yaml/OpenAPI validation are not yet in CI.
+
+## ADR-10: No API gateway
+Date: 2026-11-22
+Status: Accepted
+
+**Decision:** The browser calls both services directly, with each service's base URL in `config.js`, instead of going through a gateway or backend-for-frontend container.
+
+**Why not:** a third container is out of scope (§1c), and with two services the gateway would only forward requests.
+
+**When it would be worth building:** with more services, when the UI needs one combined response (fewer browser round trips), or to centralize CORS, authentication and rate limiting in one place.
