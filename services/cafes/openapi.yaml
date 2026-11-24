@@ -38,13 +38,13 @@ paths:
         content: { application/json: { schema: { $ref: "#/components/schemas/VisitCreate" } } }
       responses:
         "201": { description: Logged, content: { application/json: { schema: { $ref: "#/components/schemas/VisitCreated" } } } }
-        "400": { description: Invalid rating, price, date or drink, content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+        "400": { description: "Invalid rating, price, date or drink", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
         "404": { description: Café not found, content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
   /visits:
     get:
       summary: All visits (called by the analytics service)
       responses:
-        "200": { description: All visits, newest first, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/VisitRow" } } } } }
+        "200": { description: "All visits, newest first", content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/VisitRow" } } } } }
 components:
   schemas:
     Health:

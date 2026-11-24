@@ -26,7 +26,7 @@ paths:
     get:
       summary: The monthly budget goal
       responses:
-        "200": { description: Goal, or null if none is set, content: { application/json: { schema: { $ref: "#/components/schemas/Budget" } } } }
+        "200": { description: "Goal, or null if none is set", content: { application/json: { schema: { $ref: "#/components/schemas/Budget" } } } }
     put:
       summary: Set the monthly budget goal
       requestBody:
