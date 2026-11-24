@@ -1,1 +1,0 @@
-IF DB_ID('cafepassport') IS NULL CREATE DATABASE cafepassport;

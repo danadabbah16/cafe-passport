@@ -251,7 +251,7 @@
 
     async function renderInsights(cafes) {
         const lists = await Promise.all(
-            cafes.map(c => fetch(`/cafes/${c.id}/visits`).then(r => r.json()).then(vs => ({cafe: c.name, visits: vs})))
+            cafes.map(c => fetch(`${CONFIG.CAFES_URL}/cafes/${c.id}/visits`).then(r => r.json()).then(vs => ({cafe: c.name, visits: vs})))
         );
         const all = lists.flatMap(l => l.visits.map(v => ({...v, cafe: l.cafe})));
         renderBudget(all)
