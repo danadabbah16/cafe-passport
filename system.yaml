@@ -23,7 +23,7 @@ services:
       PORT: { default: 8000, description: Port the service listens on }
       DATABASE_URL: { secret: true, description: "Connection string of the cafes database (mssql://user:password@host:port/database)" }
       UI_ORIGIN: { default: "http://localhost:8080", description: The only origin allowed by CORS (the UI's address) }
-      GIT_SHA: { default: dev, description: Commit SHA of the build, reported as version by /health }
+      GIT_SHA: { default: dev, description: "Commit SHA of the build, reported as version by /health" }
       DB_CONNECT_RETRIES: { default: 8, description: Connection attempts with backoff while the database resumes from pause }
     azure:
       container_app: daqdabbah-ieu2024-cafes
@@ -39,7 +39,7 @@ services:
       PORT: { default: 8000, description: Port the service listens on }
       DATABASE_URL: { secret: true, description: "Connection string of the analytics database (mssql://user:password@host:port/database)" }
       UI_ORIGIN: { default: "http://localhost:8080", description: The only origin allowed by CORS (the UI's address) }
-      GIT_SHA: { default: dev, description: Commit SHA of the build, reported as version by /health }
+      GIT_SHA: { default: dev, description: "Commit SHA of the build, reported as version by /health"
       DB_CONNECT_RETRIES: { default: 8, description: Connection attempts with backoff while the database resumes from pause }
       CAFES_URL: { default: "http://cafes:8000", description: Base URL of the cafes service }
       CAFES_TIMEOUT_S: { default: 2, description: Timeout in seconds for every call to cafes }
