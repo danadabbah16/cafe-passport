@@ -2,7 +2,7 @@
 
 ## 1. Backend framework: Flask with stdlib sqlite3
 Date: 2026-10-08
-Status: Decided
+Status: Superseded in part by ADR-7: storage moved from SQLite to one SQL Server database per service; Flask is still used.
 Context: Single-process monolith with two domains (visit logging, ranking analytics) over HTTP with SQLite. The stack must stay small enough to explain line-by-line at the comprehension check.
 Decision: Flask for routing/JSON, Python's built-in sqlite3 for persistence, no ORM.
 Alternatives considered: FastAPI — async and auto-docs add nothing for a single-user app with no concurrent I/O; Django — brings ORM/admin/auth machinery this project doesn't need, which the brief itself cites as poor judgment at this scale.
@@ -34,7 +34,7 @@ Consequences: High confidence in the math and input handling.
 
 ## 5. Deliberately not built: multi-user accounts and authentication
 Date: 2026-10-12
-Status: Decided
+Status: Superseded in part by ADR-7: the budget goal moved from browser localStorage to the analytics database.
 Context: A visit log could naturally serve many users, which would require accounts, login, and per-user data separation.
 Decision: The app is single-user by design: no auth, no user table, every visit belongs to the one owner.
 Alternatives considered: Flask-Login with a users table — rejected because it adds a dependency and schema complexity that serve no requirement in this assignment, and §1b asks that additions be justified.
@@ -74,29 +74,27 @@ Status: Accepted
 
 **Consequences:** no down-migrations to maintain; startup must apply migrations before serving, which is safe because each Container App runs at most one replica.
 
-## ADR-8: Serverless hosting on Azure (planned)
+## ADR-8: Serverless hosting on Azure
 Date: 2026-11-22
-Status: Accepted (deployment not yet completed at submission)
+Status: Accepted (deployed 2026-11-24)
 
-**Decision:** Both services on Azure Container Apps (Consumption plan, min 0 / max 1 replica), one Azure SQL serverless database per service on one logical server (free offer, auto-pause after 60 min), the UI on a Storage static website, images from GHCR tagged with the commit SHA.
+**Decision:** Both services run on Azure Container Apps (Consumption plan, min 0 / max 1 replica, 0.25 vCPU / 0.5 GiB) in one environment; each has its own Azure SQL serverless database (free offer, auto-pause after 60 minutes) on one logical server; the UI is an Azure Storage static website; images come from GHCR tagged with the commit SHA. Region francecentral, one of the five allowed by the subscription.
 
-**Cost model:** everything is pay-per-use; nothing costs money while idle.
+**Cost model:** all pay-per-use. Idle containers scale to zero, idle databases pause, and the static website and GHCR cost nothing at this scale.
 
-**Consequences of scale-to-zero:** the first request after idle starts a container and may find the database paused (resume takes up to about a minute), so connections need retries with backoff, and the UI shows a "starting up, try again" message instead of a blank page (implemented). Max 1 replica means migrations at startup never run twice concurrently.
+**Consequences of scale-to-zero:** the first request after idle starts a container (Azure answers 503 "App port is not ready" for up to about 30 s) and may find the database paused (resume takes up to about a minute). The services connect with retries and exponential backoff (DB_CONNECT_RETRIES), the UI shows "starting up, try again" instead of a blank page, and the post-deploy health check retries for 5 minutes. Max 1 replica means migrations at startup never run twice concurrently.
 
-**At 100x traffic:** raise max replicas, move migrations out of startup into a pipeline step (so replicas don't race), and consider a provisioned database tier to avoid pause/resume latency.
+**At 100x traffic:** raise max replicas, and move migrations out of startup into a pipeline step so replicas can't race; consider a provisioned database tier to remove pause/resume latency; cache rankings in analytics instead of fetching all visits on every request.
 
 ## ADR-9: Pipeline gates and testing
 Date: 2026-11-22
-Status: Accepted
+Status: Accepted (updated 2026-11-24)
 
-**Decision:** CI runs on every push and PR: one test job per service (each in its own folder with its own dependencies), and an images job that only runs after tests pass and publishes SHA-tagged images to GHCR only from main.
+**Decision:** CI (every push and pull request) runs, per service: ruff lint, the tests against a SQL Server service container, and a 70% coverage gate; it also validates system.yaml against system.schema.json and both OpenAPI documents. Images build only after tests and validation pass. CD (push to main) calls CI first, so nothing is deployed from a commit whose CI failed, then pushes SHA-tagged images, deploys, uploads the UI and fails unless both /health endpoints return 200. CI never touches Azure SQL.
 
-**Cross-seam test:** analytics' tests replace cafes with stubs (monkeypatched `load_visits` / `load_cafe_names`), plus one test against an unreachable URL that proves a real network failure becomes `CafesUnavailable` and a 503. Stubbing was chosen over running the compose stack in CI because it is fast and deterministic.
+**Tests:** each test run creates a throwaway database and drops it afterwards, so runs never share state. Migrations are exercised on every run. The cross-seam test stubs cafes inside analytics' tests (monkeypatched load_visits / load_cafe_names), plus one test against an unreachable URL proving a real network failure becomes CafesUnavailable and a 503. Stubbing was chosen over running the compose stack in CI because it is fast and deterministic.
 
-**Deliberately not tested:** the UI's JavaScript (verified manually, with screenshots of each failure mode), and the timeout value itself.
-
-**Known gap:** per-service coverage threshold, linting and system.yaml/OpenAPI validation are not yet in CI.
+**Deliberately not tested:** the UI's JavaScript (verified manually, including each failure mode), and the exact timeout value.
 
 ## ADR-10: No API gateway
 Date: 2026-11-22
