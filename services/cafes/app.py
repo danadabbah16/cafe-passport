@@ -25,8 +25,8 @@ VERSION = os.environ.get("GIT_SHA", "dev")
 @app.route("/health", methods=["GET"])
 def health():
     try:
-        conn = get_connection()
-        conn.execute("SELECT 1")
+        conn = get_connection(retries=1)
+        conn.execute("SELECT 1 AS ok")
         conn.close()
         return jsonify({"status": "ok", "db": "ok", "version": VERSION}), 200
     except Exception:

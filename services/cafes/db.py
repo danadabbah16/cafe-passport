@@ -1,52 +1,99 @@
+import glob
 import os
-import sqlite3
+import time
 
-DATA_DIR = os.environ.get("DATA_DIR", "./data")
-DB_PATH = os.path.join(DATA_DIR, "cafe_passport.db")
+import pymssql
 
-SCHEMA = """
-         CREATE TABLE IF NOT EXISTS cafes (
-                                              id           INTEGER PRIMARY KEY AUTOINCREMENT,
-                                              name         TEXT NOT NULL UNIQUE,
-                                              neighborhood TEXT,
-                                              city         TEXT NOT NULL,
-                                              created_at   TEXT NOT NULL DEFAULT (datetime('now'))
-             );
-
-         CREATE TABLE IF NOT EXISTS visits (
-                                               id         INTEGER PRIMARY KEY AUTOINCREMENT,
-                                               cafe_id    INTEGER NOT NULL REFERENCES cafes(id),
-             visit_date TEXT NOT NULL,
-             drink      TEXT NOT NULL,
-             price      REAL NOT NULL CHECK (price >= 0),
-             rating     INTEGER NOT NULL CHECK (rating BETWEEN 1 AND 10),
-             notes      TEXT
-             ); \
-         """
+MIGRATIONS_DIR = os.path.join(os.path.dirname(__file__), "migrations")
+SEED_PATH = os.path.join(os.path.dirname(__file__), "seed.sql")
+CONNECT_RETRIES = int(os.environ.get("DB_CONNECT_RETRIES", 8))
 
 
-def get_connection():
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row          # rows behave like dicts: row["name"]
-    conn.execute("PRAGMA foreign_keys = ON")  # SQLite ignores FKs unless told not to
-    return conn
+def parse_database_url(url: str) -> dict:
+    """mssql://user:password@host:port/database -> pymssql connect arguments.
+    Splits on the LAST '@', so the password may contain ':' '/' or '@'."""
+    rest = url.split("://", 1)[1]
+    creds, _, hostpart = rest.rpartition("@")
+    user, _, password = creds.partition(":")
+    hostport, _, database = hostpart.partition("/")
+    host, _, port = hostport.partition(":")
+    return {"server": host, "port": int(port or 1433),
+            "user": user, "password": password, "database": database}
 
 
-def init_db():
-    """Create schema if missing and seed starter data once. Safe to run on every boot."""
-    os.makedirs(DATA_DIR, exist_ok=True)
+class Connection:
+    """Thin wrapper so the rest of the code keeps the sqlite3-style API:
+    conn.execute(sql, params) with '?' placeholders, rows as dicts."""
+
+    def __init__(self, raw):
+        self._raw = raw
+
+    def execute(self, sql, params=()):
+        cur = self._raw.cursor(as_dict=True)
+        if params:
+            cur.execute(sql.replace("?", "%s"), tuple(params))
+        else:
+            cur.execute(sql)
+        return cur
+
+    def commit(self):
+        self._raw.commit()
+
+    def close(self):
+        self._raw.close()
+
+
+def get_connection(retries: int = CONNECT_RETRIES) -> Connection:
+    """Connect with retries and backoff: Azure SQL serverless may be paused
+    and takes up to about a minute to resume."""
+    cfg = parse_database_url(os.environ["DATABASE_URL"])
+    delay = 1
+    for attempt in range(1, retries + 1):
+        try:
+            return Connection(pymssql.connect(login_timeout=10, timeout=30, **cfg))
+        except (pymssql.OperationalError, pymssql.InterfaceError) as e:
+            if attempt == retries:
+                raise
+            print(f"db connect attempt {attempt}/{retries} failed ({type(e).__name__}); "
+                  f"retrying in {delay}s", flush=True)
+            time.sleep(delay)
+            delay = min(delay * 2, 15)
+
+
+def run_migrations(conn: Connection) -> None:
+    """Apply migrations/NNN_*.sql in order, each exactly once,
+    recording applied files in schema_migrations."""
+    conn.execute(
+        "IF OBJECT_ID('schema_migrations', 'U') IS NULL "
+        "CREATE TABLE schema_migrations ("
+        " version NVARCHAR(255) NOT NULL PRIMARY KEY,"
+        " applied_at DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME())"
+    )
+    conn.commit()
+    applied = {r["version"] for r in conn.execute("SELECT version FROM schema_migrations").fetchall()}
+    for path in sorted(glob.glob(os.path.join(MIGRATIONS_DIR, "*.sql"))):
+        version = os.path.basename(path)
+        if version in applied:
+            continue
+        print(f"applying migration {version}", flush=True)
+        with open(path, encoding="utf-8") as f:
+            conn.execute(f.read())
+        conn.execute("INSERT INTO schema_migrations (version) VALUES (?)", (version,))
+        conn.commit()
+        print(f"applied migration {version}", flush=True)
+
+
+def init_db() -> None:
+    """Run pending migrations, then seed once if the cafes table is empty."""
     conn = get_connection()
-    conn.executescript(SCHEMA)
+    run_migrations(conn)
     _seed_if_empty(conn)
     conn.commit()
     conn.close()
 
 
-def _seed_if_empty(conn):
-    # only seed when the cafes table has no rows yet.
-    count = conn.execute("SELECT COUNT(*) FROM cafes").fetchone()[0]
-    if count > 0:
+def _seed_if_empty(conn: Connection) -> None:
+    if conn.execute("SELECT COUNT(*) AS n FROM cafes").fetchone()["n"] > 0:
         return
-    seed_path = os.path.join(os.path.dirname(__file__), "seed.sql")
-    with open(seed_path, encoding="utf-8") as f:
-        conn.executescript(f.read())
+    with open(SEED_PATH, encoding="utf-8") as f:
+        conn.execute(f.read())
