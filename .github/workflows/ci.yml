@@ -2,31 +2,45 @@ name: CI
 
 on:
   push:
+    branches-ignore: [main]   # main is handled by cd.yml, which calls this workflow
   pull_request:
+  workflow_call:
 
 jobs:
   test:
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - run: pip install -r requirements.txt
-      - run: python -m pytest tests --cov
-
-  test-cafes:
-    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: [cafes, analytics]
+    services:
+      mssql:
+        image: mcr.microsoft.com/mssql/server:2022-latest
+        env:
+          ACCEPT_EULA: "Y"
+          MSSQL_SA_PASSWORD: ${{ secrets.CI_SA_PASSWORD }}
+        ports:
+          - 1433:1433
+        options: >-
+          --health-cmd "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P \"$MSSQL_SA_PASSWORD\" -C -Q 'SELECT 1' -b"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+          --health-start-period 20s
     defaults:
       run:
-        working-directory: services/cafes
+        working-directory: services/${{ matrix.service }}
+    env:
+      TEST_ADMIN_URL: mssql://sa:${{ secrets.CI_SA_PASSWORD }}@localhost:1433/master
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install -r requirements.txt
-      - run: python -m pytest --cov
+      - run: pip install -r requirements.txt ruff==0.8.4
+      - name: Lint
+        run: ruff check .
+      - name: Test with coverage gate (>= 70%)
+        run: python -m pytest --cov=. --cov-report=term --cov-fail-under=70
 
   images:
     needs: test
@@ -34,6 +48,9 @@ jobs:
     permissions:
       contents: read
       packages: write
+    strategy:
+      matrix:
+        service: [cafes, analytics]
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-buildx-action@v3
@@ -46,19 +63,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
       - uses: docker/build-push-action@v6
         with:
-          context: .
+          context: services/${{ matrix.service }}
           push: ${{ github.ref == 'refs/heads/main' }}
-          tags: ghcr.io/${{ env.OWNER }}/cafe-passport:${{ github.sha }}
-
-  test-analytics:
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: services/analytics
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - run: pip install -r requirements.txt
-      - run: python -m pytest --cov
+          provenance: false
+          tags: ghcr.io/${{ env.OWNER }}/cafe-passport-${{ matrix.service }}:${{ github.sha }}

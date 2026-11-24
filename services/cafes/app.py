@@ -1,8 +1,10 @@
 import os
 
-from flask import Flask, jsonify
+import time
 
-from db import init_db, get_connection
+from flask import Flask, g, jsonify, request
+
+from db import check_db, init_db
 from cafes import bp
 
 app = Flask(__name__)
@@ -22,15 +24,25 @@ def cors(resp):
 VERSION = os.environ.get("GIT_SHA", "dev")
 
 
+@app.before_request
+def start_timer():
+    g.start = time.perf_counter()
+
+
+@app.after_request
+def log_request(resp):
+    ms = (time.perf_counter() - g.get("start", time.perf_counter())) * 1000
+    print(f"{request.method} {request.path} {resp.status_code} {ms:.0f}ms", flush=True)
+    return resp
+
 @app.route("/health", methods=["GET"])
 def health():
+    # This service's own state only: never calls the other service.
     try:
-        conn = get_connection()
-        conn.execute("SELECT 1")
-        conn.close()
+        check_db()
         return jsonify({"status": "ok", "db": "ok", "version": VERSION}), 200
     except Exception:
-        return jsonify({"status": "error", "db": "unreachable", "version": VERSION}), 503
+        return jsonify({"status": "error", "db": "unavailable", "version": VERSION}), 503
 
 
 if __name__ == "__main__":

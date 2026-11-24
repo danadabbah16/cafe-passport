@@ -1,0 +1,88 @@
+name: CD
+
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: deploy-main
+  cancel-in-progress: false
+
+jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
+    secrets: inherit
+    permissions:
+      contents: read
+      packages: write
+
+  deploy:
+    needs: ci
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    env:
+      PREFIX: ${{ vars.PREFIX }}
+      RG: ${{ vars.RESOURCE_GROUP }}
+      UI_STORAGE: ${{ vars.UI_STORAGE }}
+      SHA: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Work out names and addresses
+        run: |
+          echo "OWNER=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_ENV"
+          echo "SQL_HOST=${PREFIX}-sql.database.windows.net" >> "$GITHUB_ENV"
+          UI_URL=$(az storage account show -n "$UI_STORAGE" -g "$RG" --query primaryEndpoints.web -o tsv)
+          echo "UI_URL=${UI_URL%/}" >> "$GITHUB_ENV"
+          echo "CAFES_FQDN=$(az containerapp show -n "$PREFIX-cafes" -g "$RG" --query properties.configuration.ingress.fqdn -o tsv)" >> "$GITHUB_ENV"
+          echo "ANALYTICS_FQDN=$(az containerapp show -n "$PREFIX-analytics" -g "$RG" --query properties.configuration.ingress.fqdn -o tsv)" >> "$GITHUB_ENV"
+
+      - name: Deploy cafes
+        env:
+          DB_PASSWORD: ${{ secrets.CAFES_DB_PASSWORD }}
+        run: |
+          az containerapp secret set -n "$PREFIX-cafes" -g "$RG" \
+            --secrets "database-url=mssql://cafes_app:${DB_PASSWORD}@${SQL_HOST}:1433/${PREFIX}-cafes-db"
+          az containerapp update -n "$PREFIX-cafes" -g "$RG" \
+            --image "ghcr.io/${OWNER}/cafe-passport-cafes:${SHA}" \
+            --set-env-vars DATABASE_URL=secretref:database-url GIT_SHA="$SHA" UI_ORIGIN="$UI_URL"
+
+      - name: Deploy analytics
+        env:
+          DB_PASSWORD: ${{ secrets.ANALYTICS_DB_PASSWORD }}
+        run: |
+          az containerapp secret set -n "$PREFIX-analytics" -g "$RG" \
+            --secrets "database-url=mssql://analytics_app:${DB_PASSWORD}@${SQL_HOST}:1433/${PREFIX}-analytics-db"
+          az containerapp update -n "$PREFIX-analytics" -g "$RG" \
+            --image "ghcr.io/${OWNER}/cafe-passport-analytics:${SHA}" \
+            --set-env-vars DATABASE_URL=secretref:database-url GIT_SHA="$SHA" UI_ORIGIN="$UI_URL" \
+              CAFES_URL="https://${CAFES_FQDN}" CAFES_TIMEOUT_S=2
+
+      - name: Publish the UI with the services' addresses
+        run: |
+          printf 'window.CONFIG = {\n  CAFES_URL: "https://%s",\n  ANALYTICS_URL: "https://%s",\n};\n' \
+            "$CAFES_FQDN" "$ANALYTICS_FQDN" > ui/config.js
+          cat ui/config.js
+          az storage blob upload-batch --account-name "$UI_STORAGE" -d '$web' -s ui --overwrite
+
+      - name: Health check (allows for cold start and database resume)
+        run: |
+          for svc in cafes analytics; do
+            if [ "$svc" = cafes ]; then host="$CAFES_FQDN"; else host="$ANALYTICS_FQDN"; fi
+            for i in $(seq 1 30); do
+              if curl -fsS --max-time 30 "https://${host}/health"; then
+                echo; echo "$svc is healthy"; break
+              fi
+              if [ "$i" = 30 ]; then echo "$svc never returned 200"; exit 1; fi
+              echo "waiting for $svc ($i/30)"; sleep 10
+            done
+          done
+          echo "Live at ${UI_URL}"

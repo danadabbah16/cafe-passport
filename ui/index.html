@@ -165,6 +165,7 @@
 <script>
     const $ = id => document.getElementById(id);
     let cafesCache = [];
+    let budgetGoal = 0;
 
     function toast(msg, ok) {
         const t = $("toast");
@@ -179,21 +180,27 @@
     }
 
     async function loadAll() {
-        let rankings, stats, cafes;
-        try {
-            [rankings, stats, cafes] = await Promise.all([
-                fetch(CONFIG.ANALYTICS_URL + "/rankings").then(r => r.json()),
-                fetch(CONFIG.ANALYTICS_URL + "/stats").then(r => r.json()),
-                fetch(CONFIG.CAFES_URL + "/cafes").then(r => r.json()),
-            ]);
-        } catch (e) {
+        const getJson = url => fetch(url).then(r => r.json()).catch(() => null);
+        let [rankings, stats, cafes, budget] = await Promise.all([
+            getJson(CONFIG.ANALYTICS_URL + "/rankings"),
+            getJson(CONFIG.ANALYTICS_URL + "/stats"),
+            getJson(CONFIG.CAFES_URL + "/cafes"),
+            getJson(CONFIG.ANALYTICS_URL + "/budget"),
+        ]);
+        budgetGoal = (budget && budget.monthly_goal) || 0;
+
+        if (rankings === null && cafes === null) {
             toast("Services are starting up. Try again in a moment.", false);
             return;
         }
         if (!Array.isArray(rankings)) {
-            toast(rankings.error || "Rankings unavailable right now.", false);
+            toast((rankings && rankings.error) || "Rankings unavailable right now.", false);
             rankings = [];
             stats = { total_visits: "-", total_spent: "-" };
+        }
+        if (!Array.isArray(cafes)) {
+            toast("Cafés service unavailable right now.", false);
+            cafes = [];
         }
         cafesCache = cafes;
 
@@ -244,7 +251,7 @@
 
     async function renderInsights(cafes) {
         const lists = await Promise.all(
-            cafes.map(c => fetch(`/cafes/${c.id}/visits`).then(r => r.json()).then(vs => ({cafe: c.name, visits: vs})))
+            cafes.map(c => fetch(`${CONFIG.CAFES_URL}/cafes/${c.id}/visits`).then(r => r.json()).then(vs => ({cafe: c.name, visits: vs})))
         );
         const all = lists.flatMap(l => l.visits.map(v => ({...v, cafe: l.cafe})));
         renderBudget(all)
@@ -289,8 +296,7 @@
     }
 
     function renderBudget(allVisits) {
-        let goal = 0;
-        try { goal = parseFloat(localStorage.getItem("budgetGoal")) || 0; } catch (e) {}
+        const goal = budgetGoal;
         const row = $("budgetRow"), msg = $("bMsg");
         if (!goal) { row.hidden = true; msg.hidden = false; msg.textContent = "No budget set — enter a monthly goal above."; return; }
 
@@ -311,11 +317,14 @@
         $("bGoal").value = goal;
     }
 
-    $("budgetForm").addEventListener("submit", e => {
+    $("budgetForm").addEventListener("submit", async e => {
         e.preventDefault();
-        try { localStorage.setItem("budgetGoal", $("bGoal").value); } catch (e2) {}
-        loadAll();
-        toast("Budget goal saved 🎯", true);
+        const res = await fetch(CONFIG.ANALYTICS_URL + "/budget", {
+            method: "PUT", headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({ monthly_goal: parseFloat($("bGoal").value) }),
+        }).catch(() => null);
+        if (res && res.ok) { toast("Budget goal saved", true); loadAll(); }
+        else toast("Couldn't save the budget right now.", false);
     });
 
 

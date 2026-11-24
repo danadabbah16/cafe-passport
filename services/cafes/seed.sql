@@ -1,6 +1,6 @@
--- Starter cafés so the app is useful on first boot (loaded only when cafes is empty)
+-- Starter cafés, loaded only when the cafes table is empty
 INSERT INTO cafes (name, neighborhood, city) VALUES
-                                                 ('Pan y Pepinillos Café', 'Malasaña', 'Madrid'),
-                                                 ('HanSo Café', 'Malasaña', 'Madrid'),
-                                                 ('Santagloria', 'Chamartin', 'Madrid'),
-                                                 ('La Papa', 'Centro', 'Madrid');
+                                                 (N'Pan y Pepinillos Café', N'Malasaña', N'Madrid'),
+                                                 (N'HanSo Café', N'Malasaña', N'Madrid'),
+                                                 (N'Santagloria', N'Chamartin', N'Madrid'),
+                                                 (N'La Papa', N'Centro', N'Madrid');
