@@ -1,0 +1,77 @@
+openapi: 3.0.3
+info:
+  title: Café Passport - analytics service
+  version: "1.0"
+  description: Rankings, stats and the monthly budget (analytics domain). Reads visit data from the cafes service over HTTP.
+paths:
+  /health:
+    get:
+      summary: Health of this service and its own database (never the cafes service)
+      responses:
+        "200": { description: Can read and write its database, content: { application/json: { schema: { $ref: "#/components/schemas/Health" } } } }
+        "503": { description: Database unavailable, content: { application/json: { schema: { $ref: "#/components/schemas/Health" } } } }
+  /rankings:
+    get:
+      summary: Recency-weighted, confidence-adjusted café ranking
+      responses:
+        "200": { description: Ranked cafés, best first, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/RankingEntry" } } } } }
+        "503": { description: Cafes service unavailable or timed out, content: { application/json: { schema: { $ref: "#/components/schemas/Unavailable" } } } }
+  /stats:
+    get:
+      summary: Totals across all visits
+      responses:
+        "200": { description: Stats, content: { application/json: { schema: { $ref: "#/components/schemas/Stats" } } } }
+        "503": { description: Cafes service unavailable or timed out, content: { application/json: { schema: { $ref: "#/components/schemas/Unavailable" } } } }
+  /budget:
+    get:
+      summary: The monthly budget goal
+      responses:
+        "200": { description: Goal, or null if none is set, content: { application/json: { schema: { $ref: "#/components/schemas/Budget" } } } }
+    put:
+      summary: Set the monthly budget goal
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/Budget" } } }
+      responses:
+        "200": { description: Saved, content: { application/json: { schema: { $ref: "#/components/schemas/Budget" } } } }
+        "400": { description: Not a positive number, content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+components:
+  schemas:
+    Health:
+      type: object
+      required: [status, db, version]
+      properties:
+        status: { type: string, example: ok }
+        db: { type: string, example: ok }
+        version: { type: string }
+    Error:
+      type: object
+      required: [error]
+      properties: { error: { type: string } }
+    Unavailable:
+      type: object
+      required: [error, detail]
+      properties:
+        error: { type: string, example: cafes service unavailable }
+        detail: { type: string }
+    RankingEntry:
+      type: object
+      required: [cafe, score, raw_score, visits]
+      properties:
+        cafe: { type: string }
+        score: { type: number, description: Score after shrinkage toward the global mean }
+        raw_score: { type: number, description: Recency-weighted average rating }
+        visits: { type: integer }
+    Stats:
+      type: object
+      required: [total_visits, total_spent]
+      properties:
+        total_visits: { type: integer }
+        total_spent: { type: number }
+        average_rating: { type: number, nullable: true }
+        most_visited: { type: string, nullable: true }
+    Budget:
+      type: object
+      required: [monthly_goal]
+      properties:
+        monthly_goal: { type: number, nullable: true, exclusiveMinimum: true, minimum: 0 }

@@ -1,0 +1,109 @@
+openapi: 3.0.3
+info:
+  title: Café Passport - cafes service
+  version: "1.0"
+  description: Cafés and the visits logged to them (logging domain).
+paths:
+  /health:
+    get:
+      summary: Health of this service and its own database
+      responses:
+        "200": { description: Can read and write its database, content: { application/json: { schema: { $ref: "#/components/schemas/Health" } } } }
+        "503": { description: Database unavailable, content: { application/json: { schema: { $ref: "#/components/schemas/Health" } } } }
+  /cafes:
+    get:
+      summary: List cafés
+      responses:
+        "200": { description: All cafés, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/Cafe" } } } } }
+    post:
+      summary: Add a café
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/CafeCreate" } } }
+      responses:
+        "201": { description: Created, content: { application/json: { schema: { $ref: "#/components/schemas/Created" } } } }
+        "400": { description: Name or city missing, content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+        "409": { description: A café with this name exists, content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+  /cafes/{cafe_id}/visits:
+    parameters:
+      - { name: cafe_id, in: path, required: true, schema: { type: integer } }
+    get:
+      summary: List the visits of one café, newest first
+      responses:
+        "200": { description: Visits, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/Visit" } } } } }
+    post:
+      summary: Log a visit to a café
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/VisitCreate" } } }
+      responses:
+        "201": { description: Logged, content: { application/json: { schema: { $ref: "#/components/schemas/VisitCreated" } } } }
+        "400": { description: Invalid rating, price, date or drink, content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+        "404": { description: Café not found, content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+  /visits:
+    get:
+      summary: All visits (called by the analytics service)
+      responses:
+        "200": { description: All visits, newest first, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/VisitRow" } } } } }
+components:
+  schemas:
+    Health:
+      type: object
+      required: [status, db, version]
+      properties:
+        status: { type: string, example: ok }
+        db: { type: string, example: ok }
+        version: { type: string, description: Git SHA of the deployed build }
+    Error:
+      type: object
+      required: [error]
+      properties: { error: { type: string } }
+    Cafe:
+      type: object
+      required: [id, name, city]
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        neighborhood: { type: string, nullable: true }
+        city: { type: string }
+        created_at: { type: string }
+    CafeCreate:
+      type: object
+      required: [name, city]
+      properties:
+        name: { type: string }
+        neighborhood: { type: string, nullable: true }
+        city: { type: string }
+    Created:
+      type: object
+      required: [id, name]
+      properties: { id: { type: integer }, name: { type: string } }
+    VisitCreate:
+      type: object
+      required: [visit_date, drink, price, rating]
+      properties:
+        visit_date: { type: string, format: date, example: "2026-11-24" }
+        drink: { type: string }
+        price: { type: number, minimum: 0 }
+        rating: { type: integer, minimum: 1, maximum: 10 }
+        notes: { type: string, nullable: true }
+    VisitCreated:
+      type: object
+      required: [id, cafe_id]
+      properties: { id: { type: integer }, cafe_id: { type: integer } }
+    Visit:
+      allOf:
+        - $ref: "#/components/schemas/VisitRow"
+        - type: object
+          properties: { notes: { type: string, nullable: true } }
+    VisitRow:
+      type: object
+      required: [id, cafe_id, visit_date, drink, price, rating, currency]
+      properties:
+        id: { type: integer }
+        cafe_id: { type: integer }
+        visit_date: { type: string, format: date }
+        drink: { type: string }
+        price: { type: number }
+        rating: { type: integer }
+        currency: { type: string, example: EUR }

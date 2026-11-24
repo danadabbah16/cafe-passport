@@ -1,0 +1,56 @@
+# yaml-language-server: $schema=./system.schema.json
+student: daqdabbah.ieu2024
+prefix: daqdabbah-ieu2024
+public_url: https://daqdabbahieu2024ui.z28.web.core.windows.net
+ui:
+  path: ui
+  storage_account: daqdabbahieu2024ui
+  calls: [cafes, analytics]
+azure:
+  resource_group: rg-daqdabbah-ieu2024
+  container_apps_environment: daqdabbah-ieu2024-env
+  sql_server: daqdabbah-ieu2024-sql
+  registry: ghcr.io/danadabbah16
+services:
+  cafes:
+    description: Cafés and the visits logged to them (logging domain).
+    path: services/cafes
+    openapi: services/cafes/openapi.yaml
+    port_default: 8000
+    health: /health
+    migrations: services/cafes/migrations
+    env:
+      PORT: { default: 8000, description: Port the service listens on }
+      DATABASE_URL: { secret: true, description: "Connection string of the cafes database (mssql://user:password@host:port/database)" }
+      UI_ORIGIN: { default: "http://localhost:8080", description: The only origin allowed by CORS (the UI's address) }
+      GIT_SHA: { default: dev, description: Commit SHA of the build, reported as version by /health }
+      DB_CONNECT_RETRIES: { default: 8, description: Connection attempts with backoff while the database resumes from pause }
+    azure:
+      container_app: daqdabbah-ieu2024-cafes
+      sql_database: daqdabbah-ieu2024-cafes-db
+  analytics:
+    description: Rankings, stats and the monthly budget (analytics domain); reads visit data from cafes over HTTP.
+    path: services/analytics
+    openapi: services/analytics/openapi.yaml
+    port_default: 8000
+    health: /health
+    migrations: services/analytics/migrations
+    env:
+      PORT: { default: 8000, description: Port the service listens on }
+      DATABASE_URL: { secret: true, description: "Connection string of the analytics database (mssql://user:password@host:port/database)" }
+      UI_ORIGIN: { default: "http://localhost:8080", description: The only origin allowed by CORS (the UI's address) }
+      GIT_SHA: { default: dev, description: Commit SHA of the build, reported as version by /health }
+      DB_CONNECT_RETRIES: { default: 8, description: Connection attempts with backoff while the database resumes from pause }
+      CAFES_URL: { default: "http://cafes:8000", description: Base URL of the cafes service }
+      CAFES_TIMEOUT_S: { default: 2, description: Timeout in seconds for every call to cafes }
+      HALF_LIFE_DAYS: { default: 60, description: Days until a visit's ranking weight halves }
+      CONFIDENCE_K: { default: 3, description: Shrinkage constant toward the global mean }
+    calls:
+      - service: cafes
+        url_env: CAFES_URL
+        endpoints: ["GET /visits", "GET /cafes"]
+        timeout_s: 2
+        on_failure: "Rankings and stats answer 503 with {\"error\": \"cafes service unavailable\"}; the UI shows that message while the café list and forms keep working if only analytics is affected."
+    azure:
+      container_app: daqdabbah-ieu2024-analytics
+      sql_database: daqdabbah-ieu2024-analytics-db

@@ -43,7 +43,7 @@ jobs:
         run: python -m pytest --cov=. --cov-report=term --cov-fail-under=70
 
   images:
-    needs: test
+    needs: [test, validate]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -67,3 +67,18 @@ jobs:
           push: ${{ github.ref == 'refs/heads/main' }}
           provenance: false
           tags: ghcr.io/${{ env.OWNER }}/cafe-passport-${{ matrix.service }}:${{ github.sha }}
+
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install check-jsonschema==0.29.4 openapi-spec-validator==0.7.1
+      - name: system.yaml matches system.schema.json
+        run: check-jsonschema --schemafile system.schema.json system.yaml
+      - name: OpenAPI documents are valid
+        run: |
+          openapi-spec-validator services/cafes/openapi.yaml
+          openapi-spec-validator services/analytics/openapi.yaml
