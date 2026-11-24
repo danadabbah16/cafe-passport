@@ -50,3 +50,9 @@ def test_health_is_503_when_db_unavailable(client, monkeypatch):
     r = client.get("/health")
     assert r.status_code == 503
     assert r.get_json()["db"] == "unavailable"
+
+def test_visits_have_default_currency_after_migration_002(client):
+    client.post("/cafes/1/visits",
+                json={"visit_date": "2026-11-24", "drink": "mocha", "price": 4.0, "rating": 7})
+    visits = client.get("/visits").get_json()
+    assert visits and all(v["currency"] == "EUR" for v in visits)
