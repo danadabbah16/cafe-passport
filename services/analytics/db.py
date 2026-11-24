@@ -38,6 +38,9 @@ class Connection:
     def commit(self):
         self._raw.commit()
 
+    def rollback(self):
+        self._raw.rollback()
+
     def close(self):
         self._raw.close()
 
@@ -88,3 +91,15 @@ def init_db() -> None:
     run_migrations(conn)
     conn.commit()
     conn.close()
+
+def check_db() -> None:
+    """Raise if this service cannot read AND write its own database.
+    The write is rolled back, so nothing changes."""
+    conn = get_connection(retries=1)
+    try:
+        row = conn.execute("SELECT TOP 1 version FROM schema_migrations ORDER BY version").fetchone()
+        conn.execute("UPDATE schema_migrations SET applied_at = applied_at WHERE version = ?",
+                     (row["version"],))
+        conn.rollback()
+    finally:
+        conn.close()

@@ -38,3 +38,15 @@ def test_list_all_visits(client):
     assert r.status_code == 200
     visits = r.get_json()
     assert any(v["cafe_id"] == 1 and v["drink"] == "latte" for v in visits)
+
+
+def test_health_is_503_when_db_unavailable(client, monkeypatch):
+    import app as app_module
+
+    def db_down():
+        raise RuntimeError("database unavailable")
+
+    monkeypatch.setattr(app_module, "check_db", db_down)
+    r = client.get("/health")
+    assert r.status_code == 503
+    assert r.get_json()["db"] == "unavailable"

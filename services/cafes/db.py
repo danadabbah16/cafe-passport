@@ -39,6 +39,9 @@ class Connection:
     def commit(self):
         self._raw.commit()
 
+    def rollback(self):
+        self._raw.rollback()
+
     def close(self):
         self._raw.close()
 
@@ -97,3 +100,15 @@ def _seed_if_empty(conn: Connection) -> None:
         return
     with open(SEED_PATH, encoding="utf-8") as f:
         conn.execute(f.read())
+
+def check_db() -> None:
+    """Raise if this service cannot read AND write its own database.
+    The write is rolled back, so nothing changes."""
+    conn = get_connection(retries=1)
+    try:
+        row = conn.execute("SELECT TOP 1 version FROM schema_migrations ORDER BY version").fetchone()
+        conn.execute("UPDATE schema_migrations SET applied_at = applied_at WHERE version = ?",
+                     (row["version"],))
+        conn.rollback()
+    finally:
+        conn.close()

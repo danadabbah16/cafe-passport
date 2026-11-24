@@ -30,3 +30,14 @@ def test_unreachable_cafes_raises_cafes_unavailable(monkeypatch):
 
 def test_health_is_own_state(client):
     assert client.get("/health").status_code == 200
+
+def test_health_is_503_when_db_unavailable(client, monkeypatch):
+    import app as app_module
+
+    def db_down():
+        raise RuntimeError("database unavailable")
+
+    monkeypatch.setattr(app_module, "check_db", db_down)
+    r = client.get("/health")
+    assert r.status_code == 503
+    assert r.get_json()["db"] == "unavailable"

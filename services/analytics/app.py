@@ -1,10 +1,12 @@
 import os
 
-from flask import Flask, jsonify
+import time
+
+from flask import Flask, g, jsonify, request
 
 from analytics import bp as analytics_bp
 from budget import bp as budget_bp
-from db import get_connection, init_db
+from db import check_db, init_db
 
 app = Flask(__name__)
 init_db()
@@ -22,17 +24,25 @@ def cors(resp):
     resp.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, OPTIONS"
     return resp
 
+@app.before_request
+def start_timer():
+    g.start = time.perf_counter()
+
+
+@app.after_request
+def log_request(resp):
+    ms = (time.perf_counter() - g.get("start", time.perf_counter())) * 1000
+    print(f"{request.method} {request.path} {resp.status_code} {ms:.0f}ms", flush=True)
+    return resp
 
 @app.route("/health", methods=["GET"])
 def health():
-    # Reports this service's own state only, never the cafes service's.
+    # This service's own state only: never calls the other service.
     try:
-        conn = get_connection(retries=1)
-        conn.execute("SELECT 1 AS ok")
-        conn.close()
+        check_db()
         return jsonify({"status": "ok", "db": "ok", "version": VERSION}), 200
     except Exception:
-        return jsonify({"status": "error", "db": "unreachable", "version": VERSION}), 503
+        return jsonify({"status": "error", "db": "unavailable", "version": VERSION}), 503
 
 
 if __name__ == "__main__":
