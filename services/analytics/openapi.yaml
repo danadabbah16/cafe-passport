@@ -14,7 +14,7 @@ paths:
     get:
       summary: Recency-weighted, confidence-adjusted café ranking
       responses:
-        "200": { description: Ranked cafés, best first, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/RankingEntry" } } } } }
+        "200": { description: "Ranked cafés, best first", content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/RankingEntry" } } } } }
         "503": { description: Cafes service unavailable or timed out, content: { application/json: { schema: { $ref: "#/components/schemas/Unavailable" } } } }
   /stats:
     get:
